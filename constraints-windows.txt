@@ -1,0 +1,4 @@
+# Verified CUDA combination for this Windows RTX 2060 deployment.
+# Install these first from https://download.pytorch.org/whl/cu126.
+torch==2.10.0+cu126
+torchvision==0.25.0+cu126

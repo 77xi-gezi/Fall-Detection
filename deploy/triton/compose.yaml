@@ -1,0 +1,28 @@
+name: fall-detection-triton
+services:
+  triton:
+    image: nvcr.io/nvidia/tritonserver:26.08-py3
+    container_name: fall-detection-triton
+    restart: unless-stopped
+    shm_size: 1gb
+    ports:
+      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:8001:8001"
+      - "127.0.0.1:8002:8002"
+    volumes:
+      - ./model_repository:/models:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    command:
+      - tritonserver
+      - --model-repository=/models
+      - --strict-readiness=true
+      - --exit-on-error=true
+      - --model-load-thread-count=1
+      - --pinned-memory-pool-byte-size=134217728
+      - --cuda-memory-pool-byte-size=0:134217728

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>人体跌倒检测 · 图片工作台</title>
+  <link rel="icon" href="{{ url_for('static', filename='logo.svg') }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="人体跌倒检测首页"><img src="{{ url_for('static', filename='logo.svg') }}" alt="" width="34" height="34"><span>人体跌倒检测<span class="brand-sub">图片工作台</span></span></a>
+    <div class="service"><span class="status-dot" id="service-dot"></span><span id="service-status">正在连接检测服务</span><button class="icon-button" id="refresh-health" title="重新检查服务" aria-label="重新检查服务">↻</button></div>
+  </header>
+  <main>
+    <div class="intro"><span class="eyebrow">IMAGE DETECTION</span><h1>上传图片，查看人体状态。</h1><p>选择一张或多张图片，获取人体关键点、状态识别和标注结果。</p></div>
+    <div class="workspace">
+      <section class="panel upload-panel" aria-labelledby="upload-heading">
+        <div class="panel-heading"><h2 id="upload-heading"><span class="step">01</span>选择图片</h2><span class="muted" id="file-count">尚未选择</span></div>
+        <label class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="点击选择或拖入图片">
+          <input type="file" id="file-input" accept=".jpg,.jpeg,.png,.bmp,.tif,.tiff,.webp" multiple hidden>
+          <svg width="45" height="45" viewBox="0 0 48 48" fill="none" aria-hidden="true"><rect x="7" y="7" width="34" height="34" rx="9" stroke="currentColor" stroke-width="1.7"/><path d="m9 33 10-10 10 10 5-5 7 7M30 16h8m-4-4v8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <strong>点击选择，或将图片拖到这里</strong><span>支持多张图片，每张独立检测</span><small>JPG · PNG · BMP · TIFF · WEBP<br>每张 ≤ 16 MB · 每次 ≤ 50 张 · 总计 ≤ 100 MB</small>
+          <span class="choose-button">选择图片 <span aria-hidden="true">＋</span></span>
+        </label>
+        <div id="selection" class="selection" aria-label="已选图片"></div>
+        <div class="upload-actions"><button id="clear-button" class="text-button" disabled>清空选择</button><span class="muted" id="total-size"></span></div>
+        <button class="primary-button" id="detect-button" disabled><span id="detect-label">开始检测</span><span aria-hidden="true">→</span></button>
+        <p id="activity" class="activity" role="status" aria-live="polite">请选择需要检测的图片</p>
+        <div id="error-message" class="error-box" role="alert" hidden></div>
+        <div class="model-note"><span class="note-icon">i</span><p><strong>关于检测结果</strong>当前分类权重原用于连续帧，单图识别准确率尚未验证。页面显示模型预测，请结合原图判断。</p></div>
+      </section>
+      <section class="panel results-panel" aria-labelledby="results-heading">
+        <div class="panel-heading"><h2 id="results-heading"><span class="step">02</span>检测结果</h2><span class="muted" id="result-count">等待检测</span></div>
+        <div class="empty-state" id="empty-state"><div class="empty-symbol" aria-hidden="true">⌁</div><h3>结果将在这里显示</h3><p>完成检测后，查看图片中的人物状态，<br>并下载带标注的图片和详细结果。</p><div class="state-legend"><span><i class="legend-normal"></i>正常</span><span><i class="legend-falling"></i>疑似跌倒</span><span><i class="legend-fallen"></i>倒地</span></div></div>
+        <div id="results-summary" class="results-summary" hidden></div>
+        <div id="results" class="result-list" aria-live="polite"></div>
+        <div id="downloads" class="downloads" hidden><a id="download-zip" class="secondary-button" href="#">下载全部结果 ↓</a><a id="download-csv" href="#">下载汇总 CSV</a><a id="download-json" href="#">下载汇总 JSON</a></div>
+      </section>
+    </div>
+    <footer><span><i class="footer-dot"></i>本机图片检测</span><span>YOLO26s-Pose · LSTM</span></footer>
+  </main>
+  <dialog id="image-dialog"><button id="close-dialog" class="dialog-close" aria-label="关闭大图">×</button><img id="large-image" alt="检测标注大图"></dialog>
+</body>
+</html>

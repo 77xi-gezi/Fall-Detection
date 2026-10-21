@@ -1,0 +1,105 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "浏览器：图片检测网页（Triton）",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/web_app.py",
+      "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "envFile": "${workspaceFolder}/.vscode/project.env",
+      "args": ["--open-browser"],
+      "justMyCode": true
+    },
+    {
+      "name": "跌倒检测：文件夹批量单图（YOLO26s-Pose）",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/detect_folder.py",
+      "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "envFile": "${workspaceFolder}/.vscode/project.env",
+      "args": [
+        "--input",
+        "${input:imageFolder}",
+        "--output",
+        "output/batch_results",
+        "--yolo-model",
+        "yolo26s-pose.pt"
+      ],
+      "justMyCode": true
+    },
+    {
+      "name": "跌倒检测：单张图片（YOLO26s-Pose）",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/detect_falls.py",
+      "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "envFile": "${workspaceFolder}/.vscode/project.env",
+      "args": [
+        "--input",
+        "${input:imagePath}",
+        "--yolo-model",
+        "yolo26s-pose.pt",
+        "--imgsz",
+        "640"
+      ],
+      "justMyCode": true
+    },
+    {
+      "name": "Triton：单张图片",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/detect_falls.py",
+      "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "envFile": "${workspaceFolder}/.vscode/project.env",
+      "args": [
+        "--input",
+        "${input:imagePath}",
+        "--backend",
+        "triton"
+      ],
+      "justMyCode": true
+    },
+    {
+      "name": "Triton：文件夹批量图片",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/detect_folder.py",
+      "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "envFile": "${workspaceFolder}/.vscode/project.env",
+      "args": [
+        "--input",
+        "${input:imageFolder}",
+        "--output",
+        "output/triton_batch_results",
+        "--backend",
+        "triton"
+      ],
+      "justMyCode": true
+    }
+  ],
+  "inputs": [
+    {
+      "id": "imagePath",
+      "type": "promptString",
+      "description": "输入单张图片路径，或 input/ 中的图片文件名",
+      "default": "demo.jpg"
+    },
+    {
+      "id": "imageFolder",
+      "type": "promptString",
+      "description": "输入需要批量检测的图片文件夹路径",
+      "default": "input/images"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+# Inference: YOLO26s-Pose + pretrained 5-feature LSTM only.
+ultralytics>=8.4.0
+opencv-python>=4.13.0
+torch>=2.10.0
+torchvision>=0.25.0
+numpy>=2.0.0
+
+# Local browser upload interface.
+-r requirements-web.txt
+
+# Development checks
+pytest>=9.0.0
+ruff>=0.15.0

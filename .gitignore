@@ -1,0 +1,76 @@
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+.ruff_cache/
+.tools/
+# ONNX models are included so a fresh clone can start Triton.
+deploy/triton/validation_report.json
+
+# Data files (too large for git)
+data/raw/
+data/processed/
+data/splits/
+*.npy
+
+# YOLO model weights (downloaded automatically, re-downloadable)
+yolo*.pt
+!yolo26s-pose.pt
+
+# Video files
+*.mp4
+*.MP4
+*.avi
+*.AVI
+*.mov
+*.MOV
+*.mkv
+*.MKV
+*.webm
+*.WEBM
+*.wmv
+*.WMV
+*.flv
+*.FLV
+*.m4v
+*.M4V
+
+# Test/output artifacts
+output/
+input/*
+!input/images/
+input/images/*
+!input/images/.gitkeep
+events/
+events.json
+Ultralytics/
+
+# Local credentials and environment overrides
+.env
+.env.*
+*.env
+*.pem
+*.key
+credentials.json
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/project.env
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp
+tmp/
+*.tmp
