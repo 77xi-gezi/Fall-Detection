@@ -1,4 +1,4 @@
-"""Local browser upload UI backed by the existing Triton single-image pipeline."""
+"""Browser image and asynchronous video inference using the Triton pipeline."""
 import argparse
 import csv
 import hmac
@@ -87,8 +87,21 @@ def create_app(*, pipeline=None, output_root: Path | None = None,
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=0, x_proto=1, x_host=0, x_port=0)
     output_root = Path(output_root or PROJECT_ROOT / "output/web_results").resolve()
     inference_lock = threading.Lock()
+    archive_lock = threading.Lock()
     pipelines = [pipeline]
     check_health = health_checker or (lambda: triton_health(triton_url))
+
+    def get_pipeline():
+        if pipelines[0] is None:
+            from src.pipeline import FallDetectionPipeline
+
+            pipelines[0] = FallDetectionPipeline(backend="triton", triton_url=triton_url)
+        return pipelines[0]
+
+    from src.video_web import register_video_routes
+
+    register_video_routes(app, output_root=output_root, inference_lock=inference_lock,
+                          get_pipeline=get_pipeline, check_health=check_health)
 
     @app.before_request
     def protect_local_upload():
@@ -112,7 +125,7 @@ def create_app(*, pipeline=None, output_root: Path | None = None,
             if request.headers.get("Sec-Fetch-Site") == "cross-site" or (
                 origin and origin.rstrip("/") != request.host_url.rstrip("/")
             ):
-                return jsonify(error="请从当前检测网页提交图片。"), 403
+                return jsonify(error="请从当前检测网页提交文件。"), 403
 
     @app.after_request
     def response_headers(response):
@@ -120,7 +133,8 @@ def create_app(*, pipeline=None, output_root: Path | None = None,
         response.headers["Referrer-Policy"] = "same-origin"
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; img-src 'self' blob:; style-src 'self'; "
-            "script-src 'self'; connect-src 'self'; frame-ancestors 'none'; "
+            "script-src 'self'; connect-src 'self'; media-src 'self' blob:; "
+            "frame-ancestors 'none'; "
             "base-uri 'self'; form-action 'self'; object-src 'none'"
         )
         if request.path.startswith("/api/"):
@@ -133,9 +147,9 @@ def create_app(*, pipeline=None, output_root: Path | None = None,
     @app.errorhandler(HTTPException)
     def http_error(error):
         messages = {
-            413: "本次上传总大小超过 100 MB，请减少图片数量。",
+            413: "本次上传超过限制，请将图片总大小或单个视频控制在 100 MB 内。",
             404: "未找到页面或结果文件。",
-            400: "上传请求无效，请重新选择图片。",
+            400: "上传请求无效，请重新选择文件。",
         }
         return jsonify(error=messages.get(error.code, error.description)), error.code
 
@@ -147,6 +161,7 @@ def create_app(*, pipeline=None, output_root: Path | None = None,
     def health():
         return jsonify(**check_health(), app="fall-detection-web", backend="triton",
                        max_files=MAX_FILES,
+                       video_enabled=True, video_window_frames=30, max_video_mb=100,
                        max_file_mb=MAX_FILE_BYTES // (1024 * 1024))
 
     @app.post("/api/detect")
@@ -155,15 +170,12 @@ def create_app(*, pipeline=None, output_root: Path | None = None,
         if not uploads or len(uploads) > MAX_FILES:
             return jsonify(error=f"请选择 1 至 {MAX_FILES} 张图片。"), 400
         if not inference_lock.acquire(blocking=False):
-            return jsonify(error="正在处理另一批图片，请等待完成后重试。"), 429
+            return jsonify(error="正在处理其他检测任务，请等待完成后重试。"), 429
         try:
             if not check_health()["ready"]:
                 message = "Triton 模型尚未就绪。请启动 Docker Desktop 和检测服务，再重试。"
                 return jsonify(error=message), 503
-            if pipelines[0] is None:
-                from src.pipeline import FallDetectionPipeline
-
-                pipelines[0] = FallDetectionPipeline(backend="triton", triton_url=triton_url)
+            get_pipeline()
             job_id = uuid.uuid4().hex
             job_root = output_root / job_id
             job_root.mkdir(parents=True)
@@ -242,7 +254,26 @@ def create_app(*, pipeline=None, output_root: Path | None = None,
         job_root = output_root / job_id
         if not (job_root / "summary.json").is_file():
             abort(404)
+        video_status = job_root / "status.json"
+        if video_status.is_file() and json.loads(video_status.read_text(encoding="utf-8"))[
+            "status"
+        ] != "completed":
+            abort(404)
         if filename == "results.zip":
+            if video_status.is_file():
+                # Video results can be large: stream a disk archive instead of building in RAM.
+                archive_path = job_root / "results.zip"
+                with archive_lock:
+                    if not archive_path.is_file():
+                        temporary = job_root / f"{uuid.uuid4().hex}.zip.tmp"
+                        with zipfile.ZipFile(temporary, "w", zipfile.ZIP_DEFLATED) as archive:
+                            for name in (
+                                "result.mp4", "predictions.jsonl", "summary.csv", "summary.json",
+                            ):
+                                archive.write(job_root / name, name)
+                        temporary.replace(archive_path)
+                return send_file(archive_path, mimetype="application/zip", as_attachment=True,
+                                 download_name=f"fall_video_{job_id[:8]}.zip")
             archive = io.BytesIO()
             with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as zip_file:
                 for path in sorted(job_root.iterdir()):
@@ -253,9 +284,8 @@ def create_app(*, pipeline=None, output_root: Path | None = None,
             archive.seek(0)
             return send_file(archive, mimetype="application/zip", as_attachment=True,
                              download_name=f"fall_results_{job_id[:8]}.zip")
-        if filename not in {"summary.csv", "summary.json"} and not re.fullmatch(
-            r"\d{3}_result\.(png|json)", filename,
-        ):
+        allowed = {"summary.csv", "summary.json", "result.mp4", "predictions.jsonl"}
+        if filename not in allowed and not re.fullmatch(r"\d{3}_result\.(png|json)", filename):
             abort(404)
         return send_from_directory(job_root, filename, as_attachment="download" in request.args)
 
@@ -273,7 +303,7 @@ def server_options(public_access: bool = False) -> dict:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="浏览器图片跌倒检测，使用现有 Triton GPU 服务")
+    parser = argparse.ArgumentParser(description="浏览器图片与视频跌倒检测，使用 Triton GPU 服务")
     parser.add_argument("--port", type=int, default=8080)
     parser.add_argument("--triton-url", default="http://127.0.0.1:8000")
     parser.add_argument("--open-browser", action="store_true")

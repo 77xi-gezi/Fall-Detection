@@ -3,19 +3,24 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>人体跌倒检测 · 图片工作台</title>
+  <title>人体跌倒检测 · 图片与视频</title>
   <link rel="icon" href="{{ url_for('static', filename='logo.svg') }}" type="image/svg+xml">
   <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
   <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='video.js') }}" defer></script>
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="/" aria-label="人体跌倒检测首页"><img src="{{ url_for('static', filename='logo.svg') }}" alt="" width="34" height="34"><span>人体跌倒检测<span class="brand-sub">图片工作台</span></span></a>
+    <a class="brand" href="/" aria-label="人体跌倒检测首页"><img src="{{ url_for('static', filename='logo.svg') }}" alt="" width="34" height="34"><span>人体跌倒检测<span class="brand-sub">图片与视频工作台</span></span></a>
     <div class="service"><span class="status-dot" id="service-dot"></span><span id="service-status">正在连接检测服务</span><button class="icon-button" id="refresh-health" title="重新检查服务" aria-label="重新检查服务">↻</button></div>
   </header>
   <main>
-    <div class="intro"><span class="eyebrow">IMAGE DETECTION</span><h1>上传图片，查看人体状态。</h1><p>选择一张或多张图片，获取人体关键点、状态识别和标注结果。</p></div>
-    <div class="workspace">
+    <div class="intro"><span class="eyebrow">FALL DETECTION</span><h1>上传图片或视频，查看人体状态。</h1><p>图片独立识别，视频结合连续画面判断，查看并下载标注结果。</p></div>
+    <div class="mode-tabs" role="tablist" aria-label="检测方式">
+      <button id="image-tab" class="mode-tab active" role="tab" aria-selected="true" aria-controls="image-workspace">图片检测</button>
+      <button id="video-tab" class="mode-tab" role="tab" aria-selected="false" aria-controls="video-workspace">视频检测</button>
+    </div>
+    <div class="workspace" id="image-workspace" role="tabpanel" aria-labelledby="image-tab">
       <section class="panel upload-panel" aria-labelledby="upload-heading">
         <div class="panel-heading"><h2 id="upload-heading"><span class="step">01</span>选择图片</h2><span class="muted" id="file-count">尚未选择</span></div>
         <label class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="点击选择或拖入图片">
@@ -39,7 +44,34 @@
         <div id="downloads" class="downloads" hidden><a id="download-zip" class="secondary-button" href="#">下载全部结果 ↓</a><a id="download-csv" href="#">下载汇总 CSV</a><a id="download-json" href="#">下载汇总 JSON</a></div>
       </section>
     </div>
-    <footer><span><i class="footer-dot"></i>本机图片检测</span><span>YOLO26s-Pose · LSTM</span></footer>
+    <div class="workspace" id="video-workspace" role="tabpanel" aria-labelledby="video-tab" hidden>
+      <section class="panel upload-panel" aria-labelledby="video-heading">
+        <div class="panel-heading"><h2 id="video-heading"><span class="step">01</span>选择视频</h2><span class="muted">每次一个视频</span></div>
+        <label class="dropzone" id="video-dropzone" tabindex="0" role="button" aria-label="点击选择或拖入视频">
+          <input type="file" id="video-input" accept=".mp4,.mov,.avi,.mkv,.webm,.m4v" hidden>
+          <span class="video-symbol" aria-hidden="true">▷</span>
+          <strong>点击选择，或将视频拖到这里</strong><span>逐帧检测，结合连续 30 帧判断状态</span>
+          <small>MP4 · MOV · AVI · MKV · WEBM · M4V<br>≤ 100 MB · ≤ 5 分钟 · ≤ 1080p · 1–60 FPS</small>
+          <span class="choose-button">选择视频 <span aria-hidden="true">＋</span></span>
+        </label>
+        <p id="video-selection" class="video-selection muted">尚未选择视频</p>
+        <button class="primary-button" id="video-detect" disabled>开始视频检测 →</button>
+        <div id="video-progress-area" hidden><progress id="video-progress" max="100" value="0" aria-label="视频检测进度"></progress><p id="video-activity" class="activity" role="status" aria-live="polite"></p><button class="text-button" id="video-cancel">取消检测</button></div>
+        <div id="video-error" class="error-box" role="alert" hidden></div>
+        <div class="model-note"><span class="note-icon">i</span><p><strong>视频检测说明</strong>人物连续出现满 30 帧后开始分类，之前显示“收集连续帧”。遮挡、漏检或人物交叉可能导致重新收集或编号变化。结果为模型预测，准确率尚未验证；输出视频不含声音。</p></div>
+      </section>
+      <section class="panel results-panel" aria-labelledby="video-results-heading">
+        <div class="panel-heading"><h2 id="video-results-heading"><span class="step">02</span>视频结果</h2><span id="video-result-status" class="muted">等待检测</span></div>
+        <div class="empty-state" id="video-empty"><div class="empty-symbol" aria-hidden="true">▷</div><h3>标注视频将在这里显示</h3><p>处理完成后可播放检测结果，<br>下载 MP4 视频和逐帧记录。</p></div>
+        <div id="video-result" hidden>
+          <div id="video-summary" class="results-summary"></div>
+          <video id="video-player" controls playsinline preload="metadata" aria-label="跌倒检测标注视频"></video>
+          <p class="muted">绿色：正常 · 橙色：疑似跌倒 · 红色：倒地 · 黄色：收集连续帧</p>
+          <div class="downloads"><a id="video-download" class="secondary-button">下载标注 MP4 ↓</a><a id="video-csv">逐帧 CSV</a><a id="video-json">汇总 JSON</a><a id="video-jsonl">逐帧 JSONL</a><a id="video-zip">全部结果 ZIP</a></div>
+        </div>
+      </section>
+    </div>
+    <footer><span><i class="footer-dot"></i>图片与视频检测</span><span>YOLO26s-Pose · LSTM</span></footer>
   </main>
   <dialog id="image-dialog"><button id="close-dialog" class="dialog-close" aria-label="关闭大图">×</button><img id="large-image" alt="检测标注大图"></dialog>
 </body>

@@ -8,10 +8,10 @@ GPU 为 RTX 2060。默认配置将两个 ONNX 模型放到 GPU 0 执行。
 ## 浏览器入口
 
 在项目根目录双击 `start_browser.cmd`，或执行 `scripts/start_web.ps1`。
-浏览器打开 **http://127.0.0.1:8080** 上传图片、查看与下载检测结果。
+浏览器打开 **http://127.0.0.1:8080** 上传图片或视频、查看与下载检测结果。
 Triton 的 **http://127.0.0.1:8000/v2** 返回服务器信息，**8000** 供网页后端调用，
 图片上传和结果展示由 **8080** 端口的网页服务负责。
-详细使用方法见项目根目录 README 的“浏览器图片检测”。
+详细使用方法见项目根目录 README 的“浏览器图片与视频检测”。
 
 ## 使用现有图片脚本
 
@@ -70,11 +70,11 @@ model_repository/
 | 模型 | 输入 | 输出 |
 |---|---|---|
 | yolo26s_pose | images，FP32，[1,3,640,640] | output0，FP32，[1,300,57] |
-| fall_lstm | features，FP32，[人数,1,5] | logits，FP32，[人数,3] |
+| fall_lstm | features，FP32，[人数,帧数,5] | logits，FP32，[人数,3] |
 
 YOLO 使用 end-to-end 分支。每条检测为 xyxy 框、检测分数、类别 ID、17×3 关键点，
 客户端按人体置信度过滤并还原到原图坐标。FP32 ONNX 使用 opset 17。
-LSTM 的人数维度可变，每个人仍然只有一个真实观测。
+LSTM 的人数与时间维度可变：图片输入 1 个真实观测，视频输入 30 个连续观测。
 
 HTTP 模型推理接口：
 
@@ -97,7 +97,7 @@ docker compose -f deploy\triton\compose.yaml restart
 也可执行 `scripts/start_triton.ps1 -Export` 重新导出后启动。
 导出清单位于 `export_manifest.json`，运行验证脚本后会生成 `validation_report.json`。
 验证图片由使用者自行提供，原始图片和机器相关的验证报告不随仓库上传。
-本次验证包括 ONNX 图检查、LSTM 的 1/2/5 人输入、YOLO 与原始 PyTorch 的同预处理比较，
+本次验证包括 ONNX 图检查、LSTM 的 1/2/5 人 × 1/30 帧输入、YOLO 与原始 PyTorch 的同预处理比较，
 以及通过实际 Triton HTTP 接口完成单图和批量推理。
 
 Docker Desktop 中预先下载的 `26.08-pyt-python-py3` 只有 PyTorch/Python 后端，

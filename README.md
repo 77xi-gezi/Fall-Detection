@@ -1,6 +1,7 @@
-# 单张图片人体跌倒状态识别
+# 图片与视频人体跌倒检测
 
-输入一张图片，立即输出标注图片、状态 JSON，以及控制台结果。
+支持单张图片、文件夹内多张独立图片，以及视频文件。图片输出标注图和状态；
+视频输出带人体框、关键点和状态的 MP4、逐帧记录与汇总结果。
 图片中有多个人时，每个人分别输出 normal（正常）、falling（疑似跌倒）或 fallen（倒地）。
 没有检测到人体时输出 no_person（未检测到人体）。
 
@@ -37,7 +38,7 @@ Docker Desktop。Triton 配置使用 GPU；本地 Python 检测脚本也支持 C
 虚拟环境、Docker 镜像、原始图片数据和检测输出不随 Git 仓库上传。
 使用脚本批量检测时，将自己的图片放入 `input/images/`。
 
-## 浏览器图片检测
+## 浏览器图片与视频检测
 
 打开 Docker Desktop，双击项目中的 **`start_browser.cmd`**。
 启动程序会确认 Triton 已就绪，然后自动打开 **http://127.0.0.1:8080**。
@@ -57,7 +58,7 @@ Docker Desktop。Triton 配置使用 GPU；本地 Python 检测脚本也支持 C
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start_web.ps1
 ```
 
-在 VS Code 按 F5 可选“浏览器：图片检测网页（Triton）”，此入口需要 Docker 中的
+在 VS Code 按 F5 可选“浏览器：图片与视频检测网页（Triton）”，此入口需要 Docker 中的
 Triton 已经运行。关闭启动终端或按 Ctrl+C 可停止前台网页服务，Triton 容器仍可独立运行。
 
 网页端口为 **8080**；`http://127.0.0.1:8000/v2` 是 Triton 服务器信息接口。
@@ -72,13 +73,53 @@ Triton 已经运行。关闭启动终端或按 Ctrl+C 可停止前台网页服�
 上传与服务实现参考 [Flask 文件上传](https://flask.palletsprojects.com/en/stable/patterns/fileuploads/)
 和 [Waitress 部署说明](https://flask.palletsprojects.com/en/stable/deploying/waitress/)。
 
+## 浏览器视频检测
+
+打开同一个检测网页，点击上方 **“视频检测”**，选择一个视频，再点击 **“开始视频检测”**。
+页面显示上传状态和处理帧数，可取消任务；处理完成后直接播放标注视频，
+下载 MP4、逐帧 CSV、JSONL、汇总 JSON 或完整结果 ZIP。
+同一标签页刷新后会继续查询当前任务。手机或其他电脑通过已配置的外网链接也可使用。
+
+每次一个视频，最大 100 MB、5 分钟、18000 帧，画面不超过 1080p（支持竖屏），
+帧率 1–60 FPS。MP4、MOV、AVI、MKV、WEBM、M4V 的实际解码支持取决于编码格式；
+无法读取时可先转成 H.264 MP4。输出为无声的 H.264 MP4，不保留原音频。
+图片和视频共享检测服务，同一时间处理一个任务；其他提交会提示服务忙。
+
+视频流程：逐帧 YOLO26s-Pose → 相邻帧人体框 IoU 一对一关联 → 每个人的原始 5 特征
+→ 30 帧滑动窗口 → 原有 LSTM 三类状态。前 29 帧显示“收集连续帧”，
+不补帧、不把单张图片重复 30 次。人物漏检、遮挡、匹配失败后重新收集窗口；
+编号仅用于相邻画面关联，交叉、快速移动和镜头切换可能造成编号变化或关联错误。
+少于 30 个连续有效观测的视频仍输出标注，但不产生该人物的三类分类。
+视频汇总状态表示整个视频中出现过的最高优先级预测（倒地 > 疑似跌倒 > 正常），
+并非最后一帧的状态。CSV 每个人每帧一行，无人帧也会记录。
+
+视频功能恢复了权重的 30 帧输入形式，但没有重新训练，也未验证真实视频准确率。
+输入帧率会影响 30 帧对应的时间长度；输出分数仍是模型分数。
+结果目录与图片一致：本机 `output/web_results/<任务编号>/`，
+外网 `output/public_results/<任务编号>/`，处理后移除服务器上的原始上传副本。
+网页服务重启会中断尚未完成的任务，需要重新上传。
+
+也可在 PowerShell 中检测本地视频：
+
+```powershell
+# 本地模型，GPU 可用时自动使用 GPU
+.\.venv\Scripts\python.exe detect_video.py --input "D:\待检测视频.mp4"
+
+# 使用 Docker 中的 Triton 模型
+.\.venv\Scripts\python.exe detect_video.py --input "D:\待检测视频.mp4" --backend triton --output output/video_results
+```
+
+VS Code 按 F5 可选择“跌倒检测：视频文件（YOLO26s-Pose）”或“Triton：视频文件”。
+浏览器和命令行都使用同一套视频流程。视频编码依赖 `imageio-ffmpeg`，
+环境安装脚本会安装其自带的 FFmpeg，无需手动配置系统 PATH。
+
 ## 外网访问（手机或其他电脑）
 
 打开 Docker Desktop 后，双击项目根目录的 **`start_public.cmd`**。
 程序自动下载并校验 Cloudflare 官方 `cloudflared`，创建临时 HTTPS 地址，
 并在窗口中显示访问地址、用户名和随机密码。
 在其他设备的浏览器打开该 HTTPS 地址，按浏览器提示输入用户名和密码，
-即可选择图片并检测。其他设备不需要连接同一 Wi-Fi。
+即可选择图片或视频并检测。其他设备不需要连接同一 Wi-Fi。
 
 本机网页仍使用 `http://127.0.0.1:8080`。外网专用网页监听本机 `127.0.0.1:8081`，
 隧道只转发该网页，Triton 的 8000/8001/8002 端口继续只监听本机。
@@ -180,8 +221,9 @@ Ultralytics 8.4.177 支持该模型，无需更新 Python 或 CUDA。
   → 三类模型概率，取概率最大的类别
 ```
 
-连续帧、滑动窗口、BoT-SORT 跟踪、摄像头、视频和 RTSP 模式已删除。
-不会复制同一张图片填充 30 帧。单图没有运动历史，重心变化特征固定为 0。
+图片模式独立处理每张图片，不复制同一张图片填充 30 帧。
+单图没有运动历史，重心变化特征固定为 0。视频模式使用下文所述的真实连续帧窗口。
+摄像头、RTSP、图片序列目录模式未加入当前版本。
 
 ## 当前模型的适用范围
 
@@ -219,8 +261,11 @@ src/image_io.py            单图读写
 src/detector.py            YOLO26s-Pose 单图检测
 src/feature_extraction.py  原始 5 特征
 src/pipeline.py            单时间步分类和状态输出
+src/video_pipeline.py      视频跟踪、30帧窗口与 MP4/逐帧输出
+src/video_web.py           网页视频异步任务、进度和取消
+detect_video.py            本地视频检测入口
 models/fall_detector.py    LSTM 定义
 ```
 
-当前仓库只保留图片检测功能，训练入口和连续帧模式不在本版本中。
+当前仓库支持图片与视频文件检测，训练入口不在本版本中。
 本地开发备份属于 `.tools/`，不随仓库上传。

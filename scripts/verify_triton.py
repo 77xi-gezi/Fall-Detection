@@ -39,11 +39,12 @@ def verify(url: str, image_path: Path | None = None) -> dict:
     rng = np.random.default_rng(42)
     errors = {}
     for people in (1, 2, 5):
-        features = rng.random((people, 1, 5), dtype=np.float32)
-        local = session.run(["logits"], {"features": features})[0]
-        remote = client.infer("fall_lstm", "features", "logits", features)
-        np.testing.assert_allclose(remote, local, rtol=1e-4, atol=1e-5)
-        errors[str(people)] = float(np.max(np.abs(remote - local)))
+        for frames in (1, 30):
+            features = rng.random((people, frames, 5), dtype=np.float32)
+            local = session.run(["logits"], {"features": features})[0]
+            remote = client.infer("fall_lstm", "features", "logits", features)
+            np.testing.assert_allclose(remote, local, rtol=1e-4, atol=1e-5)
+            errors[f"{people}x{frames}"] = float(np.max(np.abs(remote - local)))
 
     image = read_image(source)
     tensor, _, _ = preprocess(image)

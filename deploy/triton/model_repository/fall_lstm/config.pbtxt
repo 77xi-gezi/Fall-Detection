@@ -2,7 +2,7 @@ name: "fall_lstm"
 platform: "onnxruntime_onnx"
 max_batch_size: 0
 input [
-  { name: "features" data_type: TYPE_FP32 dims: [ -1, 1, 5 ] }
+  { name: "features" data_type: TYPE_FP32 dims: [ -1, -1, 5 ] }
 ]
 output [
   { name: "logits" data_type: TYPE_FP32 dims: [ -1, 3 ] }

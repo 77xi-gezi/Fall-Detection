@@ -2,7 +2,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "浏览器：图片检测网页（Triton）",
+      "name": "浏览器：图片与视频检测网页（Triton）",
       "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/web_app.py",
@@ -10,7 +10,9 @@
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "envFile": "${workspaceFolder}/.vscode/project.env",
-      "args": ["--open-browser"],
+      "args": [
+        "--open-browser"
+      ],
       "justMyCode": true
     },
     {
@@ -86,6 +88,40 @@
         "triton"
       ],
       "justMyCode": true
+    },
+    {
+      "name": "跌倒检测：视频文件（YOLO26s-Pose）",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/detect_video.py",
+      "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "envFile": "${workspaceFolder}/.vscode/project.env",
+      "args": [
+        "--input",
+        "${input:videoPath}",
+        "--backend",
+        "torch"
+      ],
+      "justMyCode": true
+    },
+    {
+      "name": "Triton：视频文件",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/detect_video.py",
+      "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "envFile": "${workspaceFolder}/.vscode/project.env",
+      "args": [
+        "--input",
+        "${input:videoPath}",
+        "--backend",
+        "triton"
+      ],
+      "justMyCode": true
     }
   ],
   "inputs": [
@@ -100,6 +136,12 @@
       "type": "promptString",
       "description": "输入需要批量检测的图片文件夹路径",
       "default": "input/images"
+    },
+    {
+      "id": "videoPath",
+      "type": "promptString",
+      "description": "输入需要检测的视频文件完整路径",
+      "default": "input/deployment_smoke.mp4"
     }
   ]
 }

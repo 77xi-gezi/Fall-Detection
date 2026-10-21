@@ -19,7 +19,10 @@ def public_client(tmp_path):
     return app.test_client()
 
 
-@pytest.mark.parametrize("path", ["/", "/api/health", "/api/detect", "/results/any/result.png"])
+@pytest.mark.parametrize("path", [
+    "/", "/api/health", "/api/detect", "/results/any/result.png",
+    "/api/videos", "/api/videos/" + "a" * 32, "/results/any/result.mp4",
+])
 def test_no_public_route_exposes_inference_or_results_without_auth(public_client, path):
     response = public_client.get(path, base_url=PUBLIC)
     assert response.status_code == 401

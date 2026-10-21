@@ -28,7 +28,7 @@
         "name": "features",
         "shape": [
           -1,
-          1,
+          -1,
           5
         ]
       }
@@ -47,11 +47,19 @@
   "imgsz": 640,
   "pose_end2end": true,
   "lstm_input_frames": 1,
+  "lstm_supported_frames": [
+    1,
+    30
+  ],
+  "video_window_frames": 30,
   "lstm_training_frames": 30,
   "single_image_accuracy_validated": false,
   "lstm_onnx_max_abs_error": {
-    "1": 7.152557373046875e-07,
-    "2": 1.430511474609375e-06,
-    "5": 1.4603137969970703e-06
+    "1x1": 7.152557373046875e-07,
+    "1x30": 1.430511474609375e-06,
+    "2x1": 9.5367431640625e-07,
+    "2x30": 4.76837158203125e-07,
+    "5x1": 1.9073486328125e-06,
+    "5x30": 1.430511474609375e-06
   }
 }

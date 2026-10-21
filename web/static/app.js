@@ -62,6 +62,7 @@ async function checkHealth() {
   finally { healthPending = false; }
   $("service-dot").className = `status-dot ${ready ? "ready" : "offline"}`;
   $("service-status").textContent = ready ? "检测服务已连接" : "检测服务未就绪";
+  window.dispatchEvent(new CustomEvent("fall-health", {detail: {ready}}));
   updateControls();
 }
 function downloadLink(text, url) {

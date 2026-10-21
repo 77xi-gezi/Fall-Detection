@@ -1,4 +1,4 @@
-# Single-image YOLO26s-Pose + LSTM; Windows / Python 3.13 / RTX 2060
+# Image/video YOLO26s-Pose + LSTM; Windows / Python 3.13 / RTX 2060
 --extra-index-url https://download.pytorch.org/whl/cu126
 
 Jinja2==3.1.6
@@ -53,3 +53,5 @@ ultralytics-thop==2.2.2
 urllib3==2.8.0
 waitress==3.0.2
 Werkzeug==3.1.9
+
+imageio-ffmpeg==0.6.0

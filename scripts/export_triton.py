@@ -82,19 +82,20 @@ def export(repository: Path) -> dict:
     torch.onnx.export(
         lstm, torch.zeros(2, 1, 5), str(lstm_path), opset_version=17, dynamo=False,
         input_names=["features"], output_names=["logits"],
-        dynamic_axes={"features": {0: "people"}, "logits": {0: "people"}},
+        dynamic_axes={"features": {0: "people", 1: "frames"}, "logits": {0: "people"}},
     )
     lstm_info = describe(lstm_path)
     session = ort.InferenceSession(str(lstm_path), providers=["CPUExecutionProvider"])
     rng = np.random.default_rng(42)
     errors = {}
     for people in (1, 2, 5):
-        features = rng.random((people, 1, 5), dtype=np.float32)
-        with torch.inference_mode():
-            expected = lstm(torch.from_numpy(features)).numpy()
-        actual = session.run(["logits"], {"features": features})[0]
-        np.testing.assert_allclose(actual, expected, rtol=1e-4, atol=1e-5)
-        errors[str(people)] = float(np.max(np.abs(actual - expected)))
+        for frames in (1, 30):
+            features = rng.random((people, frames, 5), dtype=np.float32)
+            with torch.inference_mode():
+                expected = lstm(torch.from_numpy(features)).numpy()
+            actual = session.run(["logits"], {"features": features})[0]
+            np.testing.assert_allclose(actual, expected, rtol=1e-4, atol=1e-5)
+            errors[f"{people}x{frames}"] = float(np.max(np.abs(actual - expected)))
     # Validate the pose ONNX can actually execute, not only pass the graph checker.
     pose_session = ort.InferenceSession(str(pose_path), providers=["CPUExecutionProvider"])
     pose_output = pose_session.run(None, {"images": np.zeros((1, 3, 640, 640), np.float32)})[0]
@@ -104,6 +105,7 @@ def export(repository: Path) -> dict:
     manifest = {
         "pose": pose_info, "lstm": lstm_info, "opset": 17,
         "imgsz": 640, "pose_end2end": True, "lstm_input_frames": 1,
+        "lstm_supported_frames": [1, 30], "video_window_frames": 30,
         "lstm_training_frames": 30, "single_image_accuracy_validated": False,
         "lstm_onnx_max_abs_error": errors,
     }
