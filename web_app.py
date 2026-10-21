@@ -1,6 +1,7 @@
 """Local browser upload UI backed by the existing Triton single-image pipeline."""
 import argparse
 import csv
+import hmac
 import io
 import json
 import logging
@@ -14,10 +15,12 @@ import warnings
 import webbrowser
 import zipfile
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from flask import Flask, abort, jsonify, render_template, request, send_file, send_from_directory
 from PIL import Image, UnidentifiedImageError
 from werkzeug.exceptions import HTTPException
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from src.image_io import IMAGE_EXTENSIONS
 
@@ -57,7 +60,9 @@ def validate_image(path: Path) -> None:
 
 
 def create_app(*, pipeline=None, output_root: Path | None = None,
-               triton_url: str = "http://127.0.0.1:8000", health_checker=None) -> Flask:
+               triton_url: str = "http://127.0.0.1:8000", health_checker=None,
+               public_url: str | None = None, access_user: str = "fall",
+               access_password: str | None = None) -> Flask:
     app = Flask(__name__, template_folder="web/templates", static_folder="web/static")
     app.json.ensure_ascii = False
     app.config.update(
@@ -65,6 +70,21 @@ def create_app(*, pipeline=None, output_root: Path | None = None,
         MAX_FORM_PARTS=MAX_FILES + 10,
         TRUSTED_HOSTS=["127.0.0.1", "localhost"],
     )
+    if public_url:
+        public_address = urlsplit(public_url)
+        if (public_address.scheme != "https" or not public_address.hostname
+                or public_address.username or public_address.password
+                or public_address.path not in ("", "/")
+                or public_address.query or public_address.fragment
+                or public_address.port not in (None, 443)):
+            raise ValueError("Public URL must be an HTTPS origin without a path or credentials")
+        if not access_user or not access_password or len(access_password) < 12:
+            raise ValueError(
+                "Public access requires a username and a password of at least 12 chars"
+            )
+        app.config["TRUSTED_HOSTS"].append(public_address.hostname)
+        # Public servers still bind loopback; a single local HTTPS tunnel sets this header.
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=0, x_proto=1, x_host=0, x_port=0)
     output_root = Path(output_root or PROJECT_ROOT / "output/web_results").resolve()
     inference_lock = threading.Lock()
     pipelines = [pipeline]
@@ -72,12 +92,27 @@ def create_app(*, pipeline=None, output_root: Path | None = None,
 
     @app.before_request
     def protect_local_upload():
+        if public_url:
+            auth = request.authorization
+            valid = auth is not None and auth.type == "basic" and hmac.compare_digest(
+                (auth.username or "").encode("utf-8"), access_user.encode("utf-8"),
+            ) and hmac.compare_digest(
+                (auth.password or "").encode("utf-8"), access_password.encode("utf-8"),
+            )
+            if not valid:
+                response = jsonify(error="请输入外网访问用户名和密码。")
+                response.status_code = 401
+                response.headers["WWW-Authenticate"] = (
+                    'Basic realm="Fall Detection", charset="UTF-8"'
+                )
+                response.headers["Cache-Control"] = "no-store"
+                return response
         if request.method == "POST":
             origin = request.headers.get("Origin")
             if request.headers.get("Sec-Fetch-Site") == "cross-site" or (
                 origin and origin.rstrip("/") != request.host_url.rstrip("/")
             ):
-                return jsonify(error="请从本机检测网页提交图片。"), 403
+                return jsonify(error="请从当前检测网页提交图片。"), 403
 
     @app.after_request
     def response_headers(response):
@@ -90,6 +125,9 @@ def create_app(*, pipeline=None, output_root: Path | None = None,
         )
         if request.path.startswith("/api/"):
             response.headers["Cache-Control"] = "no-store"
+        if public_url:
+            response.headers["X-Robots-Tag"] = "noindex, nofollow, noarchive"
+            response.headers["Cache-Control"] = "private, no-store"
         return response
 
     @app.errorhandler(HTTPException)
@@ -224,22 +262,43 @@ def create_app(*, pipeline=None, output_root: Path | None = None,
     return app
 
 
+def server_options(public_access: bool = False) -> dict:
+    options = {"host": "127.0.0.1", "threads": 4,
+               "max_request_body_size": 104 * 1024 * 1024}
+    if public_access:
+        # Waitress 3 clears forwarding headers unless this local peer is trusted.
+        options.update(trusted_proxy="127.0.0.1", trusted_proxy_count=1,
+                       trusted_proxy_headers={"x-forwarded-proto"})
+    return options
+
+
 def main():
     parser = argparse.ArgumentParser(description="浏览器图片跌倒检测，使用现有 Triton GPU 服务")
     parser.add_argument("--port", type=int, default=8080)
     parser.add_argument("--triton-url", default="http://127.0.0.1:8000")
     parser.add_argument("--open-browser", action="store_true")
+    parser.add_argument("--public-url", help="Exact HTTPS origin of a local tunnel")
+    parser.add_argument("--access-file", type=Path,
+                        help="Local JSON file containing access credentials")
     args = parser.parse_args()
     if not 1 <= args.port <= 65535:
         parser.error("port 必须在 1 至 65535 范围内")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
     from waitress import serve
 
+    access = {}
+    if args.public_url:
+        if not args.access_file:
+            parser.error("--public-url requires --access-file")
+        access = json.loads(args.access_file.read_text(encoding="utf-8"))
+    output_root = PROJECT_ROOT / "output/public_results" if args.public_url else None
     print(f"Browser detection: http://127.0.0.1:{args.port}", flush=True)
     if args.open_browser:
         threading.Timer(1.5, lambda: webbrowser.open(f"http://127.0.0.1:{args.port}")).start()
-    serve(create_app(triton_url=args.triton_url), host="127.0.0.1", port=args.port,
-          threads=4, max_request_body_size=104 * 1024 * 1024)
+    serve(create_app(triton_url=args.triton_url, output_root=output_root,
+                     public_url=args.public_url, access_user=access.get("username", "fall"),
+                     access_password=access.get("password")), port=args.port,
+          **server_options(bool(args.public_url)))
 
 
 if __name__ == "__main__":

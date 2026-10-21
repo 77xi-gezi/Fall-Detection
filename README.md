@@ -72,6 +72,36 @@ Triton 已经运行。关闭启动终端或按 Ctrl+C 可停止前台网页服�
 上传与服务实现参考 [Flask 文件上传](https://flask.palletsprojects.com/en/stable/patterns/fileuploads/)
 和 [Waitress 部署说明](https://flask.palletsprojects.com/en/stable/deploying/waitress/)。
 
+## 外网访问（手机或其他电脑）
+
+打开 Docker Desktop 后，双击项目根目录的 **`start_public.cmd`**。
+程序自动下载并校验 Cloudflare 官方 `cloudflared`，创建临时 HTTPS 地址，
+并在窗口中显示访问地址、用户名和随机密码。
+在其他设备的浏览器打开该 HTTPS 地址，按浏览器提示输入用户名和密码，
+即可选择图片并检测。其他设备不需要连接同一 Wi-Fi。
+
+本机网页仍使用 `http://127.0.0.1:8080`。外网专用网页监听本机 `127.0.0.1:8081`，
+隧道只转发该网页，Triton 的 8000/8001/8002 端口继续只监听本机。
+外网入口会验证主机名和访问密码，检测结果和下载接口也需要认证。
+外网检测结果保存在 `output/public_results/`，与原本的本机网页结果分开。
+
+运行期间电脑需要保持开机联网，Docker、外网网页及隧道进程需要保持运行。
+临时域名会在隧道重建后变化，适合演示或测试。
+需要固定域名和长期服务时，应配置正式 Cloudflare Tunnel 或部署到服务器。
+双击 **`stop_public.cmd`** 可关闭外网入口，本机 8080 网页不受影响。
+
+也可在项目根目录查看当前链接或停止：
+
+```powershell
+.\.venv\Scripts\python.exe -X utf8 scripts\public_access.py status
+.\.venv\Scripts\python.exe -X utf8 scripts\public_access.py stop
+```
+
+访问密码和本机进程记录保存在 `.tools/public_access.json`，该目录不上传到 GitHub。
+首次下载隧道程序和建立连接需要网络。
+此入口通过 Cloudflare 转发访问请求，相关说明见
+[Cloudflare Quick Tunnels](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/)。
+
 ## ONNX / Triton 服务
 
 已导出 YOLO26s-Pose 和 LSTM 的 ONNX 模型，并部署到本机 Triton GPU 服务。
